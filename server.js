@@ -14,7 +14,9 @@ const PORT = process.env.PORT || 7000;
 let SERVER_URL = process.env.SERVER_URL;
 
 if (!SERVER_URL) {
-  if (process.env.VERCEL_URL) {
+  if (process.env.VERCEL_PROJECT_PRODUCTION_URL) {
+    SERVER_URL = `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`;
+  } else if (process.env.VERCEL_URL) {
     SERVER_URL = `https://${process.env.VERCEL_URL}`;
   } else if (process.env.RENDER_EXTERNAL_URL) {
     SERVER_URL = process.env.RENDER_EXTERNAL_URL;
