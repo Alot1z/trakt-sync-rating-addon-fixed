@@ -10,6 +10,8 @@ test('authorization request uses PKCE S256 and registered callback', () => {
   assert.match(server, /code_challenge:\s*codeChallenge/);
   assert.match(server, /code_challenge_method:\s*'S256'/);
   assert.match(server, /parsed\.pathname === '\/oauth\/callback'/);
+  assert.doesNotMatch(server, /req\.get\('x-forwarded-host'\)/);
+  assert.match(server, /if \(process\.env\.NODE_ENV === 'production'\) return ''/);
   assert.match(page, /window\.location\.origin \+ '\/oauth\/callback'/);
 });
 

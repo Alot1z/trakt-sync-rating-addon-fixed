@@ -1,49 +1,50 @@
 # Project State: Trakt Sync Rating Add-on Fixed
 
-Status: implementation in local clone; not yet committed, pushed, or deployed.
-Observed workspace: repository root (`.`)
-Remote: `https://github.com/Alot1z/trakt-sync-rating-addon-fixed`
-Branch observed: `main`
+Status: source commit pushed; follow-up security hardening is locally verified and awaiting commit. Public deployment not created yet.
+
+Repository: https://github.com/Alot1z/trakt-sync-rating-addon-fixed
+Branch: main
+Target workspace: repository root
 
 ## User intent
 
-- Maintain a public, universal configuration site anyone can open.
+- Public, universal configuration site anyone can open.
 - Each visitor connects their own Trakt account and configures their own Stremio add-on.
-- Avoid project-owned user database and do not publish personal data or credentials.
-- Correct repository URLs and fix Trakt's PKCE-required OAuth failure.
+- Avoid project-owned persistent token storage and do not publish personal data or credentials.
+- Correct repository links and fix Trakt's PKCE-required OAuth failure.
 
-## Implemented locally
+## Implemented
 
-- OAuth authorization now uses PKCE S256 challenge and same-origin `/oauth/callback`.
-- Browser validates callback origin, popup source, and OAuth state.
-- Token exchange sends `code_verifier` and does not send a Trakt client secret.
-- Hidden legacy client-secret field no longer participates in OAuth; saved legacy secret is purged when settings load.
-- Generated add-on config defaults to stateless URL mode and does not embed Upstash URL, Upstash token, or Upstash config ID.
-- UI warns that generated add-on URL contains Trakt tokens and is a bearer credential.
-- README documents hosting, callback setup, and privacy/refresh limitations.
-- Added tests in `test/oauth-pkce.test.js`.
+- Authorization Code + PKCE S256; no Trakt client secret.
+- Same-origin `/oauth/callback`; browser validates origin, popup source, and state.
+- Token exchange sends `code_verifier`; callback and configured routes use no-store/referrer protections.
+- Redirect URI validation uses configured canonical origin in production and does not trust forwarded-host headers.
+- Default configuration is stateless and excludes Upstash credentials/config IDs from generated links.
+- Trakt tokens and optional TMDB key remain in page memory during setup, not browser localStorage. Legacy saved secrets and credentials are purged.
+- Application logs sanitized to avoid printing token-bearing request URLs or external error bodies.
+- Generated URL warning explains bearer-token risk, username/TMDB key inclusion, and infrastructure logging.
+- README, environment example, lockfile, tests, and BMAD handoff/decision docs updated.
+- GitHub About homepage now points to the fork repository URL.
 
-## Hard privacy boundary
+## Privacy boundary
 
-No remote app can guarantee 100% privacy for an add-on URL that embeds tokens. Base64URL is encoding, not encryption. Anyone with that URL may use the credential, and hosting infrastructure may log URL paths. A stateless add-on also cannot rewrite its own URL after a rotated refresh token. Seamless refresh requires persistence somewhere, which conflicts with a strict no-storage requirement.
+No remote app can guarantee 100% privacy for a generated URL containing bearer tokens. Base64URL is encoding, not encryption. Anyone with the link may use the credentials, and hosting infrastructure may log URL paths. A stateless URL cannot rewrite itself after Trakt rotates a refresh token; seamless refresh requires persistence somewhere, which conflicts with strict no-storage.
 
-Do not describe this design as “100% private” or “only the creator can access the link.” Current honest claim: default mode avoids this project's own persistent token database, but handles tokens transiently and includes tokens in the generated add-on URL.
+Do not describe this design as “100% private” or accessible only to the creator. Honest claim: default mode avoids this project's persistent token database, but handles credentials transiently and includes them in the generated add-on URL.
 
-## Not done / blockers
-
-- Full browser-based OAuth with a real Trakt account remains unverified.
-- Confirm serverless deployment behavior; in-memory caches are not durable on Vercel.
-- Register exact production `/oauth/callback` URI in each Trakt app before using the hosted site.
-- GitHub repository About/homepage metadata is not yet changed; current GitHub connector exposes no repository-settings mutation operation.
-- No commit/push or deployment yet. GitHub CLI auth remains invalid; use normal GitHub device login, never extract token files or bypass security checks.
-
-## Verification completed
+## Verification
 
 - `npm test`: 6 passed, 0 failed.
 - `node --check server.js`: passed.
 - Inline JavaScript syntax checks: passed.
 - `git diff --check`: passed.
-- Local HTTP smoke: `/` returned 200; missing PKCE challenge returned 400; valid PKCE initiate returned 302 with `code_challenge_method=S256`; mismatched redirect URI returned 400; callback returned 200 with `Cache-Control: no-store`; missing code verifier returned 400.
-- Broad scan found no legacy OOB URI, original deployment URL, upstream repo URL, placeholder owner URL, hardcoded personal deployment host, or secret/path/email-pattern hits. Tests intentionally assert that legacy `clientSecretInput` references are absent from the UI.
+- Local HTTP smoke: homepage 200; missing PKCE challenge 400; valid initiate 302 with S256; mismatched redirect URI 400; callback 200 with no-store; missing verifier 400.
+- Secret/path/email scan: 0 hits; no real `.env` file; no machine-specific paths in repository docs.
 
-Still required: final secret scan, diff review, GitHub auth, push, hosted deployment, and real Trakt end-to-end test.
+## Remaining
+
+- Commit/push latest origin-validation and sanitized-log follow-up.
+- GitHub Actions workflow is staged locally but push currently requires additional GitHub OAuth `workflow` scope; do not bypass scope controls.
+- Create public Vercel project from pushed fork, set canonical `SERVER_URL`, and test live endpoints.
+- Register production `/oauth/callback` in Trakt application before real OAuth test.
+- Test real Trakt OAuth end-to-end and confirm deployment remains publicly accessible.

@@ -18,8 +18,6 @@ if (!SERVER_URL) {
     SERVER_URL = `https://${process.env.VERCEL_URL}`;
   } else if (process.env.RENDER_EXTERNAL_URL) {
     SERVER_URL = process.env.RENDER_EXTERNAL_URL;
-  } else if (process.env.VERCEL_URL) {
-    SERVER_URL = 'https://' + process.env.VERCEL_URL;
   } else if (process.env.NODE_ENV === 'production') {
     SERVER_URL = '';
   } else {
@@ -777,9 +775,20 @@ async function formatRatingTitle(pattern, ratingStyle, rating, title, type, seas
 // ============================================
 
 function requestOrigin(req) {
+  // In production, validate against the configured canonical origin rather than
+  // trusting client-supplied Host / X-Forwarded-Host values.
+  if (SERVER_URL) {
+    try {
+      const configuredOrigin = new URL(SERVER_URL).origin;
+      if (configuredOrigin && configuredOrigin !== 'null') return configuredOrigin;
+    } catch {
+      // Fall through to request origin only for local development.
+    }
+  }
+  if (process.env.NODE_ENV === 'production') return '';
   const protocol = req.get('x-forwarded-proto')?.split(',')[0]?.trim() || req.protocol;
-  const host = req.get('x-forwarded-host')?.split(',')[0]?.trim() || req.get('host');
-  return protocol + '://' + host;
+  const host = req.get('host');
+  return host ? protocol + '://' + host : '';
 }
 
 function validateOAuthRedirectUri(redirectUri, req) {
