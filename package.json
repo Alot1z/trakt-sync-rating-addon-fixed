@@ -1,7 +1,7 @@
 {
-  "name": "stremio-trakt-sync-rating",
-  "version": "2.2.0",
-  "description": "Trakt sync and rating addon for Stremio - Cloud Ready",
+  "name": "trakt-sync-rating-addon-fixed",
+  "version": "2.4.0",
+  "description": "Stremio add-on for Trakt sync and ratings using OAuth PKCE",
   "main": "server.js",
   "type": "module",
   "scripts": {
@@ -10,7 +10,7 @@
     "vercel-dev": "vercel dev",
     "vercel-deploy": "vercel --prod",
     "build": "echo 'No build step required'",
-    "test": "echo 'No tests configured'"
+    "test": "node --test"
   },
   "dependencies": {
     "axios": "^1.13.2",
@@ -29,8 +29,9 @@
     "addon",
     "sync",
     "rating",
-    "streaming"
+    "streaming",
+    "pkce"
   ],
-  "author": "Your Name",
+  "author": "Alot1z",
   "license": "MIT"
 }

@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+    <meta name="referrer" content="no-referrer">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Trakt Sync & Rate - Stremio Addon</title>
@@ -807,7 +808,7 @@
     <div class="container">
         <header>
             <h1>🎬 Trakt Sync & Rate v2.4.0</h1>
-            <p class="tagline">Create your personalized Stremio addon to sync watched states, rate content, and manage watchlist on Trakt.tv with persistent Upstash Redis storage</p>
+            <p class="tagline">Create your personalized Stremio add-on with Trakt OAuth PKCE. Stateless by default: no shared user database required.</p>
             <div class="info-box">
                 <strong>🆕 NEW FEATURES:</strong> 
                 <br>1. <strong>Display Current Ratings</strong> - See your existing ratings directly in Stremio
@@ -827,7 +828,8 @@
                 Authentication & Storage
             </h2>
 
-            <!-- Upstash Redis Configuration -->
+            <div style="display:none" aria-hidden="true">
+            <!-- Legacy Upstash controls disabled: privacy-first stateless mode -->
             <div class="form-group">
                 <label for="upstashUrl">Upstash Redis URL (For Persistent Storage)
                     <span class="tooltip">
@@ -880,7 +882,9 @@
                 <span id="upstashStatus" style="margin-left: 10px; padding: 4px 8px; border-radius: 6px; font-size: 0.9rem;"></span>
             </div>
 
-            <!-- Trakt Client ID (now above Client Secret) -->
+            </div>
+
+            <!-- Trakt Client ID (PKCE public client; no secret required) -->
             <div class="form-group">
                 <label for="clientId">
                     Trakt Client ID
@@ -893,30 +897,12 @@
                             Steps:<br>
                             1. Click "NEW APPLICATION"<br>
                             2. Name: "Stremio Trakt Addon"<br>
-                            3. Redirect URI: <code>urn:ietf:wg:oauth:2.0:oob</code><br>
-                            4. Copy the Client ID
+                            3. Set Redirect URI to your deployed site's <code>/oauth/callback</code> URL<br>
+                            4. Copy the Client ID. PKCE means no Client Secret is needed.
                         </span>
                     </span>
                 </label>
                 <input type="text" id="clientId" placeholder="Enter your Trakt Client ID">
-            </div>
-
-            <!-- Trakt Client Secret (now below Client ID) -->
-            <div class="form-group">
-                <label for="clientSecret">
-                    Trakt Client Secret
-                    <a href="https://trakt.tv/oauth/applications" target="_blank" class="info-link" style="margin-left: 5px; text-decoration: none; border-bottom: 1px dashed #60a5fa;">
-                        (Get it here)
-                    </a>
-                    <span class="tooltip" style="margin-left: 5px;">
-                        ⓘ
-                        <span class="tooltiptext">
-                            Required for OAuth token exchange.<br>
-                            Find it in your Trakt app settings.
-                        </span>
-                    </span>
-                </label>
-                <input type="password" id="clientSecret" placeholder="Enter your Trakt Client Secret">
             </div>
 
             <div class="form-group">
@@ -952,8 +938,8 @@
                 Not connected to Trakt
             </div>
 
-            <div style="margin-top: 15px; padding: 12px; background: rgba(59, 130, 246, 0.1); border-radius: 8px; border-left: 4px solid #3b82f6;">
-                <strong>💡 Important:</strong> Without Upstash Redis, Trakt tokens expire every 3 months and you'll need to reconnect. With Upstash, your connection remains persistent. <strong>v2.4.0 now includes "Current Rating Display", "Remove Rating" and "Drag & Drop Stream Ordering" features!</strong>
+            <div style="margin-top: 15px; padding: 12px; background: rgba(245, 158, 11, 0.12); border-radius: 8px; border-left: 4px solid #f59e0b;">
+                <strong>Privacy notice:</strong> Authorization code is exchanged by this service. Trakt tokens are not intentionally persisted in a shared database or browser local storage. Generated add-on URL contains access and refresh tokens, your username, and optional TMDB key so Stremio can authenticate. Base64URL is encoding, not encryption. Anyone who obtains URL may use exposed credentials, and hosting infrastructure may log request paths. Absolute privacy cannot be guaranteed on a shared hosted service. Self-hosting avoids this project's shared hosting logs, but generated URLs still contain credentials.
             </div>
         </section>
 
@@ -1449,6 +1435,10 @@
                 <!-- Addon URL will appear here -->
             </div>
 
+            <div role="note" aria-label="Private link warning" style="margin: 14px 0; padding: 14px; border: 1px solid rgba(245, 158, 11, 0.45); border-radius: 8px; color: #fcd34d; background: rgba(245, 158, 11, 0.08);">
+                <strong>Keep this link private.</strong> It contains Trakt access and refresh tokens, your configured username, and optional TMDB API key in encoded form. Base64 is not encryption. Anyone with the full link may be able to use exposed credentials. Do not publish or share it. The app does not intentionally store Trakt tokens in a shared database, but hosting infrastructure may process request URLs in logs. For strongest privacy, self-host the add-on.
+            </div>
+
             <div class="btn-group">
                 <button class="btn" onclick="installInStremioDesktop()">
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -1492,15 +1482,11 @@
 
         <!-- Footer -->
         <footer style="text-align: center; margin-top: 40px; padding: 20px; color: #64748b; font-size: 0.9rem;">
-            <p>Trakt Sync & Rate v2.4.0 - A Stremio Community Addon with Upstash Redis Support</p>
+            <p>Trakt Sync & Rate v2.4.0 - A privacy-first Stremio Community Add-on using Trakt OAuth PKCE</p>
             <p style="margin-top: 10px;">
                 Need help? Check the
-                <a href="https://github.com/ericvlog/trakt-sync-rating-addon" style="color: #60a5fa; text-decoration: none;" target="_blank">
+                <a href="https://github.com/Alot1z/trakt-sync-rating-addon-fixed" style="color: #60a5fa; text-decoration: none;" target="_blank">
                     GitHub Repository
-                </a>
-                |
-                <a href="https://upstash.com/docs/redis/overall/getstarted" style="color: #60a5fa; text-decoration: none;" target="_blank">
-                    Upstash Redis Guide
                 </a>
             </p>
         </footer>
@@ -1512,11 +1498,9 @@
             <h2 class="auth-title">Connect to Trakt.tv</h2>
 
             <div class="auth-steps">
-                <div class="auth-step">Click "Open Trakt.tv" button below</div>
-                <div class="auth-step">Log in to your Trakt account (if not already)</div>
-                <div class="auth-step">Authorize the application</div>
-                <div class="auth-step">Copy the authorization code from the page</div>
-                <div class="auth-step">Paste the code below and submit</div>
+                <div class="auth-step">Click "Open Trakt.tv" below</div>
+                <div class="auth-step">Log in and authorize the application</div>
+                <div class="auth-step">You will return here automatically when authorization succeeds</div>
             </div>
 
             <div class="btn-group">
@@ -1531,12 +1515,12 @@
                 <button class="btn btn-secondary" onclick="closeAuthPopup()">Cancel</button>
             </div>
 
-            <div class="form-group" style="margin-top: 20px;">
+            <div class="form-group" style="display:none;margin-top: 20px;">
                 <label for="authCode">Authorization Code</label>
                 <input type="text" id="authCode" placeholder="Paste the authorization code here">
             </div>
 
-            <div class="btn-group">
+            <div class="btn-group" style="display:none">
                 <button class="btn" onclick="submitAuthCode()">
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M22 2L11 13"/>
@@ -1573,7 +1557,6 @@
         let enableRemoveRating = true;
         let upstashUrl = '';
         let upstashToken = '';
-        let clientSecret = '';
         let storageMethod = 'url';
         let configId = null;
         let upstashConnected = false;
@@ -1606,7 +1589,6 @@
         const upstashUrlInput = document.getElementById('upstashUrl');
         const upstashTokenInput = document.getElementById('upstashToken');
         const upstashStatus = document.getElementById('upstashStatus');
-        const clientSecretInput = document.getElementById('clientSecret');
         const clientIdInput = document.getElementById('clientId');
         const tmdbKeyInput = document.getElementById('tmdbKey');
         const showUsernameCheckbox = document.getElementById('showUsername');
@@ -1842,12 +1824,6 @@
 
             upstashTokenInput.addEventListener('change', function() {
                 upstashToken = this.value.trim();
-                saveData();
-            });
-
-            // Client secret input
-            clientSecretInput.addEventListener('change', function() {
-                clientSecret = this.value.trim();
                 saveData();
             });
 
@@ -2447,57 +2423,101 @@
             saveData();
         }
 
+        let pendingOAuth = null;
+        let oauthPopup = null;
+
+        function createRandomVerifier() {
+            // 32 cryptographically random bytes rendered as 64 valid PKCE characters.
+            const bytes = new Uint8Array(32);
+            crypto.getRandomValues(bytes);
+            return Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('');
+        }
+
+        function toBase64Url(bytes) {
+            let binary = '';
+            bytes.forEach(byte => binary += String.fromCharCode(byte));
+            return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+        }
+
+        async function createCodeChallenge(verifier) {
+            const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier));
+            return toBase64Url(new Uint8Array(digest));
+        }
+
         function startAuth() {
-            const clientId = clientIdInput.value.trim();
-            const clientSecret = clientSecretInput.value.trim();
-            if (!clientId) {
+            if (!clientIdInput.value.trim()) {
                 alert('Please enter your Trakt Client ID');
                 return;
             }
-            if (!clientSecret) {
-                alert('Please enter your Trakt Client Secret');
-                return;
-            }
-
-            // Check Upstash credentials
-            upstashUrl = upstashUrlInput.value.trim();
-            upstashToken = upstashTokenInput.value.trim();
-
-            if (upstashUrl && upstashToken) {
-                storageMethod = 'upstash';
-            } else {
-                storageMethod = 'url';
-                if (confirm('Upstash not configured. Trakt tokens expire every 3 months. Without Upstash, you will need to reconnect after 3 months. Continue anyway?')) {
-                    // Continue without Upstash
-                } else {
-                    return;
-                }
-            }
-
+            // Privacy-first default: no third-party token database. Tokens remain in memory
+            // until the user generates a private Stremio add-on URL.
+            upstashUrl = '';
+            upstashToken = '';
+            storageMethod = 'url';
             saveData();
             authPopup.style.display = 'flex';
+            popupAuthStatus.className = 'status';
+            popupAuthStatus.textContent = 'Ready to connect securely with Trakt.';
         }
 
-        function openTraktAuth() {
+        async function openTraktAuth() {
             const clientId = clientIdInput.value.trim();
             if (!clientId) return;
-            const authUrl = `${window.location.origin}/oauth/initiate?clientId=${encodeURIComponent(clientId)}`;
-            window.open(authUrl, '_blank', 'width=600,height=700');
+            try {
+                const verifier = createRandomVerifier();
+                const stateBytes = new Uint8Array(24);
+                crypto.getRandomValues(stateBytes);
+                const state = toBase64Url(stateBytes);
+                const challenge = await createCodeChallenge(verifier);
+                const redirectUri = window.location.origin + '/oauth/callback';
+                pendingOAuth = { verifier, state, redirectUri };
+                const params = new URLSearchParams({ clientId, codeChallenge: challenge, state, redirectUri });
+                oauthPopup = window.open(window.location.origin + '/oauth/initiate?' + params.toString(), 'trakt-oauth', 'popup,width=600,height=700');
+                if (!oauthPopup) {
+                    pendingOAuth = null;
+                    throw new Error('Authorization popup was blocked. Allow popups for this site and try again.');
+                }
+                popupAuthStatus.className = 'status';
+                popupAuthStatus.textContent = 'Waiting for Trakt authorization…';
+            } catch (error) {
+                popupAuthStatus.className = 'status status-error';
+                popupAuthStatus.textContent = error.message;
+            }
         }
+
+        window.addEventListener('message', async (event) => {
+            if (event.origin !== window.location.origin || !pendingOAuth || event.source !== oauthPopup) return;
+            const result = event.data;
+            if (!result || result.type !== 'trakt-oauth-callback') return;
+            const pending = pendingOAuth;
+            pendingOAuth = null;
+            oauthPopup = null;
+            if (result.state !== pending.state) {
+                popupAuthStatus.className = 'status status-error';
+                popupAuthStatus.textContent = 'Authorization state check failed. Please try again.';
+                return;
+            }
+            if (result.error || !result.code) {
+                popupAuthStatus.className = 'status status-error';
+                popupAuthStatus.textContent = result.errorDescription || result.error || 'Trakt authorization failed.';
+                return;
+            }
+            await submitAuthCode(result.code, pending.verifier, pending.redirectUri);
+        });
 
         function closeAuthPopup() {
             authPopup.style.display = 'none';
             authCodeInput.value = '';
+            pendingOAuth = null;
+            if (oauthPopup && !oauthPopup.closed) oauthPopup.close();
+            oauthPopup = null;
         }
 
-        // FIXED: Read clientSecret directly from input
-        async function submitAuthCode() {
+        async function submitAuthCode(authCode, codeVerifier, redirectUri) {
             const clientId = clientIdInput.value.trim();
-            const clientSecret = clientSecretInput.value.trim(); // read directly from input
-            const authCode = authCodeInput.value.trim();
-
-            if (!clientId || !clientSecret || !authCode) {
-                alert('Please enter Client ID, Client Secret, and Authorization Code');
+            if (!clientId || !authCode || !codeVerifier || !redirectUri) {
+                popupAuthStatus.className = 'status status-error';
+                popupAuthStatus.textContent = 'Missing OAuth data. Please try again.';
                 return;
             }
 
@@ -2507,8 +2527,9 @@
 
                 const requestData = {
                     code: authCode,
-                    clientId: clientId,
-                    clientSecret: clientSecret
+                    codeVerifier: codeVerifier,
+                    redirectUri: redirectUri,
+                    clientId: clientId
                 };
 
                 // Add Upstash credentials if using Upstash
@@ -2551,10 +2572,10 @@
                     } else {
                         // URL storage (fallback)
                         mainAuthStatus.className = 'status status-success';
-                        mainAuthStatus.innerHTML = `<span class="upstash-indicator upstash-warning"></span> Connected as: <strong>${data.username}</strong> (URL storage - expires in 3 months)`;
+                        mainAuthStatus.textContent = 'Connected as: ' + data.username + ' (stateless mode; reauthorization may be needed after token expiry or rotation)';
 
                         popupAuthStatus.className = 'status status-success';
-                        popupAuthStatus.innerHTML = `Connected as: <strong>${data.username}</strong>`;
+                        popupAuthStatus.textContent = 'Connected as: ' + data.username + '. Keep generated add-on URL private.';
                     }
 
                     closeAuthPopup();
@@ -2575,21 +2596,17 @@
         }
 
         function generateAddonUrl() {
-            console.log('DEBUG: generateAddonUrl called');
-            console.log('DEBUG: traktTokens:', traktTokens ? 'Exists' : 'Null');
-            console.log('DEBUG: configId:', configId);
-            console.log('DEBUG: storageMethod:', storageMethod);
-
-            // CRITICAL: Check if we have either tokens or configId
-            if (!traktTokens && !configId) {
-                console.log('DEBUG: Both traktTokens and configId are null');
+            if (!traktTokens) {
                 alert('Please connect to Trakt first');
+                return;
+            }
+            if (!confirm('Privacy warning: generated Stremio add-on URL contains Trakt access and refresh tokens, your username, and optional TMDB key. Anyone with URL may use exposed credentials. Hosting providers may log URL paths. Do not share it. Continue?')) {
                 return;
             }
 
             const config = {
                 clientId: clientIdInput.value.trim(),
-                clientSecret: clientSecretInput.value.trim(),
+                redirectUri: window.location.origin + '/oauth/callback',
                 username: currentUsername,
                 tmdbKey: tmdbKeyInput.value.trim() || undefined,
                 ratings: enableRatingsCheckbox.checked ? selectedRatings : [],
@@ -2612,33 +2629,14 @@
                 streamOrder: streamOrder // Include the stream order
             };
 
-            // Add storage method specific data
-            if (storageMethod === 'upstash' && configId && upstashUrl && upstashToken) {
-                config.storage = 'upstash';
-                config.upstashUrl = upstashUrl;
-                config.upstashToken = upstashToken;
-                config.configId = configId;
-
-                // ALWAYS include tokens in config for fallback
-                if (traktTokens) {
-                    config.access_token = traktTokens.access_token;
-                    config.refresh_token = traktTokens.refresh_token;
-                    config.expires_in = traktTokens.expires_in;
-                    config.expires_at = traktTokens.expires_at;
-                    config.created_at = traktTokens.created_at;
-                }
-            } else if (traktTokens) {
-                // URL storage or fallback - MUST include tokens
-                config.storage = 'url';
-                config.access_token = traktTokens.access_token;
-                config.refresh_token = traktTokens.refresh_token;
-                config.expires_in = traktTokens.expires_in;
-                config.expires_at = traktTokens.expires_at;
-                config.created_at = traktTokens.created_at;
-            } else {
-                alert('Error: No Trakt tokens available. Please reconnect to Trakt.');
-                return;
-            }
+            // Privacy-first stateless mode: never embed Upstash credentials or config IDs.
+            // The add-on URL still contains Trakt tokens and must be treated as a password.
+            config.storage = 'url';
+            config.access_token = traktTokens.access_token;
+            config.refresh_token = traktTokens.refresh_token;
+            config.expires_in = traktTokens.expires_in;
+            config.expires_at = traktTokens.expires_at;
+            config.created_at = traktTokens.created_at;
 
             Object.keys(config).forEach(key => config[key] === undefined && delete config[key]);
 
@@ -2715,7 +2713,6 @@
 
                 // Reset all inputs
                 clientIdInput.value = '';
-                clientSecretInput.value = '';
                 tmdbKeyInput.value = '';
                 upstashUrlInput.value = '';
                 upstashTokenInput.value = '';
@@ -2823,18 +2820,21 @@
                 try {
                     const data = JSON.parse(saved);
 
-                    // Load basic fields
+                    // Purge secrets saved by older versions. Keep only non-secret preferences locally.
+                    let removedLegacySecrets = false;
+                    for (const key of ['clientSecret', 'upstashUrl', 'upstashToken', 'traktTokens', 'storageMethod', 'configId', 'tmdbKey', 'currentUsername']) {
+                        if (Object.prototype.hasOwnProperty.call(data, key)) {
+                            delete data[key];
+                            removedLegacySecrets = true;
+                        }
+                    }
+                    if (removedLegacySecrets) localStorage.setItem('trakt_config', JSON.stringify(data));
                     if (data.clientId) clientIdInput.value = data.clientId;
-                    if (data.clientSecret) clientSecretInput.value = data.clientSecret;
-                    if (data.tmdbKey) tmdbKeyInput.value = data.tmdbKey;
-                    if (data.upstashUrl) {
-                        upstashUrlInput.value = data.upstashUrl;
-                        upstashUrl = data.upstashUrl;
-                    }
-                    if (data.upstashToken) {
-                        upstashTokenInput.value = data.upstashToken;
-                        upstashToken = data.upstashToken;
-                    }
+                    // Never restore legacy Upstash credentials from saved browser configuration.
+                    upstashUrlInput.value = '';
+                    upstashTokenInput.value = '';
+                    upstashUrl = '';
+                    upstashToken = '';
                     if (data.ratings) selectedRatings = data.ratings;
                     if (data.showUsernameInName !== undefined) showUsernameCheckbox.checked = data.showUsernameInName;
                     if (data.enableWatched !== undefined) enableWatchedCheckbox.checked = data.enableWatched;
@@ -2882,15 +2882,13 @@
                         ratingSlider.value = previewRatingValue;
                         sliderValue.textContent = previewRatingValue;
                     }
-                    if (data.storageMethod) storageMethod = data.storageMethod;
-                    if (data.configId) configId = data.configId;
-                    if (data.currentUsername) currentUsername = data.currentUsername;
+                    storageMethod = 'url';
+                    configId = null;
                     if (data.streamOrder) streamOrder = data.streamOrder;
 
-                    // Load tokens from localStorage if available
-                    if (data.traktTokens) {
-                        traktTokens = data.traktTokens;
-                    }
+                    // Trakt tokens are intentionally not restored from localStorage.
+                    // Reconnect to Trakt after a page reload; keep bearer tokens out of browser storage.
+                    traktTokens = null;
 
                     // Update style selection
                     document.querySelectorAll('.rating-style-option').forEach(opt => {
@@ -2967,10 +2965,6 @@
         function saveData() {
             const data = {
                 clientId: clientIdInput.value.trim(),
-                clientSecret: clientSecretInput.value.trim(),
-                tmdbKey: tmdbKeyInput.value.trim(),
-                upstashUrl: upstashUrlInput.value.trim(),
-                upstashToken: upstashTokenInput.value.trim(),
                 ratings: selectedRatings,
                 showUsernameInName: showUsernameCheckbox.checked,
                 enableWatched: enableWatchedCheckbox.checked,
@@ -2990,11 +2984,6 @@
                 statsFormat: selectedStatsFormat,
                 selectedStats: selectedStats,
                 previewRatingValue: previewRatingValue,
-                storageMethod: storageMethod,
-                configId: configId,
-                currentUsername: currentUsername,
-                // Always save traktTokens to localStorage
-                traktTokens: traktTokens,
                 streamOrder: streamOrder
             };
             localStorage.setItem('trakt_config', JSON.stringify(data));

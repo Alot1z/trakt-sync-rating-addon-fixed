@@ -18,8 +18,10 @@ if (!SERVER_URL) {
     SERVER_URL = `https://${process.env.VERCEL_URL}`;
   } else if (process.env.RENDER_EXTERNAL_URL) {
     SERVER_URL = process.env.RENDER_EXTERNAL_URL;
+  } else if (process.env.VERCEL_URL) {
+    SERVER_URL = 'https://' + process.env.VERCEL_URL;
   } else if (process.env.NODE_ENV === 'production') {
-    SERVER_URL = `https://stremio-trakt.pls3333.duckdns.org`;
+    SERVER_URL = '';
   } else {
     SERVER_URL = `http://localhost:${PORT}`;
   }
@@ -28,7 +30,7 @@ if (!SERVER_URL) {
 // ============================================
 // CDN Configuration
 // ============================================
-const CDN_BASE = "https://cdn.jsdelivr.net/gh/ericvlog/trakt-sync-rating-addon@main/public";
+const CDN_BASE = "https://cdn.jsdelivr.net/gh/Alot1z/trakt-sync-rating-addon-fixed@main/public";
 const LOGO_URL = `${CDN_BASE}/logo.png`;
 const BACKGROUND_URL = `${CDN_BASE}/background.png`;
 const ICON_URL = `${CDN_BASE}/icon.png`;
@@ -37,6 +39,11 @@ const ICON_URL = `${CDN_BASE}/icon.png`;
 // CORS Middleware
 // ============================================
 app.use((req, res, next) => {
+  // Config URLs can contain bearer tokens. Prevent referrer and cache leaks.
+  res.setHeader('Referrer-Policy', 'no-referrer');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
   res.header('Access-Control-Allow-Origin', '*');
   res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Range');
   res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
@@ -53,6 +60,12 @@ app.options('*', (req, res) => {
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Range');
   res.sendStatus(200);
+});
+
+app.use('/configured', (req, res, next) => {
+  res.setHeader('Cache-Control', 'private, no-store, max-age=0');
+  res.setHeader('Pragma', 'no-cache');
+  next();
 });
 
 app.use(express.json());
@@ -100,7 +113,7 @@ async function upstashSet(upstashUrl, upstashToken, key, value, ttlSeconds = 90 
     );
     return response.data;
   } catch (error) {
-    console.error('Upstash set error:', error.message);
+    console.error('Upstash set request failed');
     throw error;
   }
 }
@@ -116,7 +129,7 @@ async function upstashGet(upstashUrl, upstashToken, key) {
     });
     return response.data.result;
   } catch (error) {
-    console.error('Upstash get error:', error.message);
+    console.error('Upstash get request failed');
     throw error;
   }
 }
@@ -129,7 +142,7 @@ async function testUpstashConnection(upstashUrl, upstashToken) {
     const testValue = await upstashGet(upstashUrl, upstashToken, testKey);
     return testValue === 'test_value';
   } catch (error) {
-    console.error('Upstash test error:', error.message);
+    console.error('Upstash test request failed');
     return false;
   }
 }
@@ -306,7 +319,7 @@ async function fetchTraktStats(imdbId, type, clientId) {
     return stats;
 
   } catch (error) {
-    console.error(`[TRAKT STATS] Error: ${error.message}`);
+    console.error('[TRAKT STATS] Request failed');
     return null;
   }
 }
@@ -471,7 +484,7 @@ async function getUserRating(imdbId, type, accessToken, clientId, season = null,
     return 0;
 
   } catch (error) {
-    console.error(`[USER RATING] Error: ${error.message}`);
+    console.error('[USER RATING] Request failed');
     userRatingCache.set(cacheKey, {
       rating: 0,
       timestamp: now
@@ -760,32 +773,81 @@ async function formatRatingTitle(pattern, ratingStyle, rating, title, type, seas
 }
 
 // ============================================
-// OAuth Routes with Upstash Support (UPDATED with clientSecret)
+// OAuth Authorization Code + PKCE public-client routes
 // ============================================
 
+function requestOrigin(req) {
+  const protocol = req.get('x-forwarded-proto')?.split(',')[0]?.trim() || req.protocol;
+  const host = req.get('x-forwarded-host')?.split(',')[0]?.trim() || req.get('host');
+  return protocol + '://' + host;
+}
+
+function validateOAuthRedirectUri(redirectUri, req) {
+  let parsed;
+  try { parsed = new URL(redirectUri); } catch { return false; }
+  return parsed.origin === requestOrigin(req) &&
+    parsed.pathname === '/oauth/callback' && !parsed.search && !parsed.hash;
+}
+
 app.get('/oauth/initiate', (req, res) => {
-  const { clientId } = req.query;
-
-  if (!clientId) {
-    return res.status(400).send('Missing clientId');
+  const { clientId, codeChallenge, state, redirectUri } = req.query;
+  if (!clientId || typeof clientId !== 'string') return res.status(400).send('Missing Trakt Client ID');
+  if (!codeChallenge || typeof codeChallenge !== 'string' || !/^[A-Za-z0-9_-]{43}$/.test(codeChallenge)) {
+    return res.status(400).send('Invalid PKCE code challenge');
   }
-
-  const state = Math.random().toString(36).substring(7);
-  oauthStates.set(state, {
-    clientId,
-    timestamp: Date.now()
-  });
-
-  const traktAuthUrl = `https://trakt.tv/oauth/authorize?response_type=code&client_id=${clientId}&redirect_uri=urn:ietf:wg:oauth:2.0:oob&state=${state}`;
-  res.redirect(traktAuthUrl);
+  if (!state || typeof state !== 'string' || !/^[A-Za-z0-9_-]{20,128}$/.test(state)) {
+    return res.status(400).send('Invalid OAuth state');
+  }
+  if (!redirectUri || typeof redirectUri !== 'string' || !validateOAuthRedirectUri(redirectUri, req)) {
+    return res.status(400).send('Invalid OAuth redirect URI. Use this site /oauth/callback URL.');
+  }
+  const authUrl = new URL('https://trakt.tv/oauth/authorize');
+  authUrl.search = new URLSearchParams({
+    response_type: 'code',
+    client_id: clientId,
+    redirect_uri: redirectUri,
+    state,
+    code_challenge: codeChallenge,
+    code_challenge_method: 'S256'
+  }).toString();
+  return res.redirect(authUrl.toString());
 });
 
-// Updated OAuth exchange with clientSecret support
-app.post('/oauth/exchange', async (req, res) => {
-  const { code, clientId, clientSecret, upstashUrl, upstashToken } = req.body;
+// Callback returns only the authorization result to the same-origin opener.
+app.get('/oauth/callback', (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  res.set('Content-Security-Policy', "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; base-uri 'none'; frame-ancestors 'none'");
+  res.type('html').send(`<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Trakt authorization</title></head>
+<body style="font-family:system-ui,sans-serif;max-width:36rem;margin:3rem auto;padding:0 1rem">
+<h1>Trakt authorization</h1><p id="status">Returning to the add-on…</p>
+<script>
+(() => {
+  const params = new URLSearchParams(location.search);
+  const payload = { type: 'trakt-oauth-callback', code: params.get('code'), state: params.get('state'), error: params.get('error'), errorDescription: params.get('error_description') };
+  if (window.opener && !window.opener.closed) {
+    window.opener.postMessage(payload, location.origin);
+    document.getElementById('status').textContent = payload.error ? 'Authorization was not completed. Return to the add-on.' : 'Authorization received. You can close this window.';
+    window.close();
+  } else {
+    document.getElementById('status').textContent = 'Return to the add-on tab to finish connecting.';
+  }
+})();
+</script></body></html>`);
+});
 
-  if (!clientSecret) {
-    return res.status(400).json({ success: false, error: 'Client Secret is required' });
+// Exchange a Trakt authorization code using PKCE. No client secret is sent.
+app.post('/oauth/exchange', async (req, res) => {
+  const { code, codeVerifier, redirectUri, clientId, upstashUrl, upstashToken } = req.body || {};
+
+  if (!code || !clientId || !codeVerifier || !redirectUri) {
+    return res.status(400).json({ success: false, error: 'Authorization code, Client ID, PKCE verifier, and redirect URI are required' });
+  }
+  if (typeof codeVerifier !== 'string' || !/^[A-Za-z0-9._~-]{43,128}$/.test(codeVerifier)) {
+    return res.status(400).json({ success: false, error: 'Invalid PKCE verifier' });
+  }
+  if (!validateOAuthRedirectUri(redirectUri, req)) {
+    return res.status(400).json({ success: false, error: 'Invalid OAuth redirect URI' });
   }
 
   try {
@@ -807,9 +869,9 @@ app.post('/oauth/exchange', async (req, res) => {
       body: JSON.stringify({
         code,
         client_id: clientId,
-        client_secret: clientSecret,
-        redirect_uri: 'urn:ietf:wg:oauth:2.0:oob',
-        grant_type: 'authorization_code'
+        redirect_uri: redirectUri,
+        grant_type: 'authorization_code',
+        code_verifier: codeVerifier
       }),
       signal: controller.signal
     });
@@ -818,7 +880,7 @@ app.post('/oauth/exchange', async (req, res) => {
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('[TRAKT OAUTH] Error response:', response.status, errorText.substring(0, 500));
+      console.error('[TRAKT OAUTH] Token request failed with status:', response.status);
       throw new Error(`Trakt API error: ${response.status} - ${errorText}`);
     }
 
@@ -865,7 +927,7 @@ app.post('/oauth/exchange', async (req, res) => {
         });
 
       } catch (redisError) {
-        console.error('Upstash storage failed:', redisError.message);
+        console.error('Upstash token storage failed');
         // Continue with URL storage as fallback
       }
     }
@@ -890,7 +952,7 @@ app.post('/oauth/exchange', async (req, res) => {
     }
 
   } catch (error) {
-    console.error('OAuth exchange error:', error);
+    console.error('OAuth exchange failed');
     res.status(500).json({
       success: false,
       error: error.message
@@ -898,13 +960,13 @@ app.post('/oauth/exchange', async (req, res) => {
   }
 });
 
-// Token refresh endpoint with clientSecret support (fixed storage variable)
+// Token refresh endpoint for Trakt public clients
 app.post('/oauth/refresh', async (req, res) => {
   try {
-    const { refreshToken, clientId, clientSecret, upstashUrl, upstashToken, configId, storage } = req.body;
+    const { refreshToken, clientId, redirectUri, upstashUrl, upstashToken, configId, storage } = req.body;
 
-    if (!refreshToken || !clientId || !clientSecret) {
-      return res.status(400).json({ error: 'Refresh token, Client ID, and Client Secret are required' });
+    if (!refreshToken || !clientId) {
+      return res.status(400).json({ error: 'Refresh token and Client ID are required' });
     }
 
     const controller = new AbortController();
@@ -926,8 +988,7 @@ app.post('/oauth/refresh', async (req, res) => {
       body: JSON.stringify({
         refresh_token: refreshToken,
         client_id: clientId,
-        client_secret: clientSecret,
-        redirect_uri: 'urn:ietf:wg:oauth:2.0:oob',
+        redirect_uri: redirectUri || SERVER_URL.replace(/\/$/, '') + '/oauth/callback',
         grant_type: 'refresh_token'
       }),
       signal: controller.signal
@@ -937,7 +998,7 @@ app.post('/oauth/refresh', async (req, res) => {
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('[TRAKT OAUTH] Error response:', response.status, errorText.substring(0, 500));
+      console.error('[TRAKT OAUTH] Token request failed with status:', response.status);
       throw new Error(`Trakt API error: ${response.status} - ${errorText}`);
     }
 
@@ -973,7 +1034,7 @@ app.post('/oauth/refresh', async (req, res) => {
           timestamp: Date.now()
         });
       } catch (redisError) {
-        console.error('Redis update failed:', redisError.message);
+        console.error('Redis token update failed');
       }
     }
 
@@ -984,7 +1045,7 @@ app.post('/oauth/refresh', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Token refresh error:', error);
+    console.error('Token refresh failed');
     res.status(500).json({
       success: false,
       error: error.message
@@ -1045,7 +1106,7 @@ app.post('/oauth/tokens', async (req, res) => {
       });
 
     } catch (upstashError) {
-      console.error('Upstash get failed:', upstashError.message);
+      console.error('Upstash token retrieval failed');
 
       // If Upstash fails, try the local cache even if expired
       if (cached) {
@@ -1064,7 +1125,7 @@ app.post('/oauth/tokens', async (req, res) => {
     }
 
   } catch (error) {
-    console.error('Get tokens error:', error.message);
+    console.error('Get tokens request failed');
     res.status(500).json({
       success: false,
       error: 'Failed to retrieve tokens'
@@ -1096,7 +1157,7 @@ app.post('/upstash/test', async (req, res) => {
     }
 
   } catch (error) {
-    console.error('Upstash test error:', error.message);
+    console.error('Upstash test request failed');
     res.status(500).json({
       success: false,
       error: 'Failed to connect to Upstash. Check your URL and Token.'
@@ -1105,15 +1166,15 @@ app.post('/upstash/test', async (req, res) => {
 });
 
 // ============================================
-// Token Refresh Helper (UPDATED with clientSecret)
+// Token Refresh Helper for Trakt public clients
 // ============================================
 
 async function refreshTraktTokens(userConfig) {
   try {
-    const { refresh_token, clientId, clientSecret, upstashUrl, upstashToken, configId, storage } = userConfig;
+    const { refresh_token, clientId, redirectUri, upstashUrl, upstashToken, configId, storage } = userConfig;
 
-    if (!refresh_token || !clientId || !clientSecret) {
-      console.log('[TOKEN REFRESH] Missing refresh token, clientId, or clientSecret');
+    if (!refresh_token || !clientId) {
+      console.log('[TOKEN REFRESH] Missing refresh token or clientId');
       return null;
     }
 
@@ -1143,8 +1204,7 @@ async function refreshTraktTokens(userConfig) {
       body: JSON.stringify({
         refresh_token: refresh_token,
         client_id: clientId,
-        client_secret: clientSecret,
-        redirect_uri: 'urn:ietf:wg:oauth:2.0:oob',
+        redirect_uri: redirectUri || SERVER_URL.replace(/\/$/, '') + '/oauth/callback',
         grant_type: 'refresh_token'
       }),
       signal: controller.signal
@@ -1154,7 +1214,7 @@ async function refreshTraktTokens(userConfig) {
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('[TOKEN REFRESH] Error response:', response.status, errorText.substring(0, 500));
+      console.error('[TOKEN REFRESH] Token request failed with status:', response.status);
       throw new Error(`Token refresh failed: ${response.status} - ${errorText}`);
     }
 
@@ -1198,14 +1258,14 @@ async function refreshTraktTokens(userConfig) {
 
         console.log(`[TOKEN REFRESH] Updated tokens in Upstash for ${configId}`);
       } catch (upstashError) {
-        console.error(`[TOKEN REFRESH] Failed to update Upstash: ${upstashError.message}`);
+        console.error('[TOKEN REFRESH] Upstash token update failed');
       }
     }
 
     return newTokens;
 
   } catch (error) {
-    console.error(`[TOKEN REFRESH] Error: ${error.message}`);
+    console.error('[TOKEN REFRESH] Token refresh failed');
 
     // For URL storage, mark refresh token as invalid so we don't try again
     if ((!userConfig.storage || userConfig.storage === 'url') && userConfig.refresh_token) {
@@ -1344,7 +1404,7 @@ async function getUserConfigWithTokens(config) {
         return userConfig;
 
       } catch (upstashError) {
-        console.error(`[CONFIG] Error fetching from Upstash: ${upstashError.message}`);
+        console.error('[CONFIG] Upstash token retrieval failed');
 
         // Try the local cache even if expired
         const cached = upstashTokenCache.get(userConfig.configId);
@@ -1368,7 +1428,7 @@ async function getUserConfigWithTokens(config) {
     return null;
 
   } catch (error) {
-    console.error(`[CONFIG] Error in getUserConfigWithTokens: ${error.message}`);
+    console.error('[CONFIG] Failed to load user configuration');
     return null;
   }
 }
@@ -1449,7 +1509,7 @@ async function deleteOlderWatchedStates(imdbId, type, accessToken, clientId, tit
     return deletedCount;
 
   } catch (error) {
-    console.error(`[TRAKT CLEANUP] Error: ${error.message}`);
+    console.error('[TRAKT CLEANUP] Request failed');
     return 0; // Fail silently
   }
 }
@@ -1945,7 +2005,7 @@ async function makeTraktRequest(action, type, imdbId, title, userConfig, rating 
     };
 
   } catch (error) {
-    console.error(`[TRAKT] ❌ ERROR: ${error.message}`);
+    console.error('[TRAKT] Request failed');
     return {
       success: false,
       error: error.message,
@@ -2191,7 +2251,9 @@ app.get("/configured/:config/manifest.json", (req, res) => {
   const { config } = req.params;
 
   res.setHeader('Content-Type', 'application/json');
-  console.log(`[MANIFEST] Configured manifest requested for config: ${config}`);
+  res.setHeader('Cache-Control', 'private, no-store, max-age=0');
+  res.setHeader('Pragma', 'no-cache');
+  console.log('[MANIFEST] Configured manifest requested');
 
   try {
     const userConfig = decodeConfig(config);
@@ -2235,11 +2297,11 @@ app.get("/configured/:config/manifest.json", (req, res) => {
       contactEmail: ""
     };
 
-    console.log(`[MANIFEST] ✅ Sending configured manifest. Show username: ${showUsername}, Name: "${addonName}"`);
+    console.log('[MANIFEST] Sending configured manifest');
     res.json(manifest);
 
   } catch (error) {
-    console.error(`[MANIFEST] ❌ Error generating manifest: ${error.message}`);
+    console.error('[MANIFEST] Failed to generate configured manifest');
 
     const fallbackManifest = {
       id: "org.stremio.trakt",
@@ -2451,7 +2513,7 @@ app.get("/configured/:config/stream/:type/:id.json", async (req, res) => {
     res.json({ streams });
 
   } catch (error) {
-    console.error('[STREAM] Error:', error);
+    console.error('[STREAM] Request failed');
     res.json({ streams: [] });
   }
 });
@@ -2466,7 +2528,8 @@ app.get("/configured/:config/stream/:type/:id.json", async (req, res) => {
 
 app.get("/configured/:config/configure", (req, res) => {
   const { config } = req.params;
-  console.log(`[CONFIG REDIRECT] Redirecting to configuration page with config: ${config}`);
+  res.setHeader('Cache-Control', 'private, no-store, max-age=0');
+  console.log('[CONFIG REDIRECT] Redirecting to configuration page');
   res.redirect(`/configure`);
 });
 
@@ -2519,7 +2582,7 @@ app.get("/configured/:config/trakt-action", async (req, res) => {
         console.error(`[TRAKT-ACTION] Invalid config or missing access token`);
       }
     } catch (error) {
-      console.error(`[TRAKT] Error: ${error.message}`);
+      console.error('[TRAKT] Request failed');
     }
   }, 100);
 
