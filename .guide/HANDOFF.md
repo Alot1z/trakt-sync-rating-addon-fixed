@@ -2,27 +2,32 @@
 
 ## Target
 
-Work only in this repository's root directory.
-Target fork: https://github.com/Alot1z/trakt-sync-rating-addon-fixed
-Current branch: main
+Repository: https://github.com/Alot1z/trakt-sync-rating-addon-fixed
+Branch: `main`
+Work only in repository root.
 
-Do not modify upstream repository. Do not expose or retrieve local tokens. Do not deploy or alter Trakt app settings without explicit authorization.
+Do not modify upstream repository. Do not read or expose token files. Do not alter Trakt application settings without explicit authorization.
 
-## Next actions
+## Current state
 
-1. Re-run npm test, node --check server.js, inline-script syntax checks, and git diff --check.
-2. Start local server and verify /oauth/initiate rejects missing or invalid PKCE parameters; valid requests redirect with code_challenge_method=S256, exact callback, state, and challenge.
-3. Verify /oauth/callback sends no-store headers and same-origin postMessage.
-4. Verify /oauth/exchange rejects missing verifier and mismatched redirect URI without calling Trakt.
-5. Inspect OAuth/config routes and confirm tokens never appear in application logs.
-6. Review token refresh behavior. Stateless mode does not persist rotated refresh tokens; document reauthorization/reinstall or design an explicit opt-in user-owned persistence mode before claiming seamless operation.
-7. Run full repository secret scan. Exclude .git and node_modules; never print secret values. Check tracked files for .env, personal paths, tokens, email addresses, private exports, and credentials.
-8. Verify .gitignore excludes .env, .vercel, node_modules, and generated local files.
-9. Review diff and stage only source, docs, tests, CI, and .guide artifacts. Never commit node_modules or personal files.
-10. Commit only after review. Push only to origin = Alot1z/trakt-sync-rating-addon-fixed after authentication is valid.
-11. Update GitHub About/homepage through GitHub UI because current GitHub tools lack repository-settings mutation. Configure GitHub Pages explicitly if wanted; Pages is not the Express API host.
-12. Do not claim published or deployed until commit, push, deployment, and live smoke tests are observed.
+- Commit `8b1f480` is pushed.
+- Follow-up origin-validation and log-sanitization changes pass local tests but are not committed yet.
+- GitHub About homepage is set to the fork repository URL.
+- CI workflow file exists locally at `.github/workflows/ci.yml`; Git push rejected it because current GitHub OAuth token lacks `workflow` scope. Obtain scope through normal GitHub device authorization, or keep workflow unpushed.
+- No Vercel deployment created yet.
 
-## Important limitation
+## Required next steps
 
-A public stateless Stremio add-on cannot simultaneously guarantee no token persistence anywhere, seamless refresh with rotating refresh tokens, and a generated link usable only by its creator. Explain this trade-off; do not hide it.
+1. Commit and push current verified changes to `origin/main`.
+2. Add/push `.github/workflows/ci.yml` after GitHub `workflow` scope is approved.
+3. Create Vercel project linked to `Alot1z/trakt-sync-rating-addon-fixed`.
+4. Set production `SERVER_URL` to stable canonical Vercel production domain.
+5. Confirm production domain is publicly accessible; preview protection must not block visitors.
+6. Register exact `https://YOUR-PRODUCTION-DOMAIN/oauth/callback` URI in the Trakt application.
+7. Re-run `npm test`, `node --check server.js`, inline script syntax checks, `git diff --check`, and local HTTP smoke tests.
+8. Test real Trakt OAuth end-to-end only after callback registration.
+9. Scan for secrets, personal paths, private exports, and credential-bearing logs before each push.
+
+## Privacy boundary
+
+Generated add-on URL contains Trakt access/refresh tokens, configured username, and optional TMDB API key. Base64URL is not encryption. Anyone with the URL may use the credentials. Hosting infrastructure may log request paths. Stateless mode cannot persist rotated refresh tokens, so reauthorization/reinstall may be required. Never claim 100% privacy or that a bearer-token URL is accessible only to its creator.
